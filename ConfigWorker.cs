@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ExtendedFileHandler.Extensions;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -104,7 +105,7 @@ namespace ExtendedFileHandler
 
             while (true)
             {
-                IntPtr returnedString = Marshal.AllocCoTaskMem(capacity * sizeof(char));
+                var returnedString = Marshal.AllocCoTaskMem(capacity * sizeof(char));
                 int size = GetPrivateProfileSection(Section.ToDefault(), returnedString, capacity, Path);
 
                 if (size == 0)

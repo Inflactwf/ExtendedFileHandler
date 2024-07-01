@@ -1,27 +1,29 @@
-﻿using ExtendedFileHandler.EventArgs;
+﻿using ExtendedFileHandler.EventArguments;
+using ExtendedFileHandler.Extensions;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace ExtendedFileHandler
 {
     public class DbWorker<T> where T : class, IComparable
     {
         private readonly object syncLocker = new();
-        private readonly FileInfo _dbFileInfo;
+        private readonly FileInfo dbFileInfo;
 
-        public event EventHandler<LogMessageArgs> LogMessageReceived;
+        public delegate void OnErrorEncountered(ErrorMessageEventArgs e);
+        public event OnErrorEncountered OnError;
 
         public DbWorker(FileInfo fileInfo, CultureInfo cultureInfo)
         {
-            _dbFileInfo = fileInfo;
+            dbFileInfo = fileInfo;
             Thread.CurrentThread.CurrentCulture = cultureInfo;
             Initialize();
         }
@@ -30,8 +32,8 @@ namespace ExtendedFileHandler
         {
             get
             {
-                _dbFileInfo.Refresh();
-                return _dbFileInfo;
+                dbFileInfo.Refresh();
+                return dbFileInfo;
             }
         }
 
@@ -43,16 +45,22 @@ namespace ExtendedFileHandler
             {
                 if (!DbFileInfo.Exists)
                 {
-                    using var fs = new FileStream(DbFileInfo.FullName, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                    using var sw = new StreamWriter(fs, new UTF8Encoding());
-                    sw.Flush();
-                    DbFileInfo.Refresh();
+                    try
+                    {
+                        using var fs = DbFileInfo.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                        using var sw = new StreamWriter(fs, new UTF8Encoding());
+                        sw.Flush();
+                    }
+                    catch (Exception ex)
+                    {
+                        LogMessage($"An error occurred while initializing the file.\nMessage: {ex.Message}", ex.StackTrace);
+                    }
                 }
             }
         }
 
-        private void LogMessage(string message) =>
-            LogMessageReceived?.Invoke(this, new(message));
+        private void LogMessage(string message, string stackTrace) =>
+            OnError?.Invoke(new(message, stackTrace));
 
         #region Entries getters
 
@@ -126,7 +134,7 @@ namespace ExtendedFileHandler
         /// <param name="source"></param>
         /// <returns><see langword="True"/> if the entry exists, otherwise <see langword="False"/>.</returns>
         /// <exception cref="ArgumentNullException"></exception>
-        public bool IsEntryExists(T entry) => 
+        public bool IsEntryExists(T entry) =>
             entry is null
             ? throw new ArgumentNullException(nameof(entry))
             : SearchEntryDirectlyOrNull(entry, GetEntries()) != null;
@@ -200,13 +208,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    AddEntries(entries, overwriteExisting);
-
-                LogMessage($"Не удалось добавить записи. Причина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -228,13 +230,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    AddEntry(entry, overwriteExisting);
-
-                LogMessage($"Не удалось добавить {entry}. Причина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -263,13 +259,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    DeleteEntry(predicate);
-
-                LogMessage($"Не удалось удалить запись. Причина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -294,13 +284,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    DeleteEntry(entry);
-
-                LogMessage($"Не удалось удалить {entry}. Причина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -322,13 +306,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    DeleteEntries(predicate);
-
-                LogMessage($"Не удалось удалить записи. Причина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -351,13 +329,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    DeleteEntries(entries);
-
-                LogMessage($"Не удалось удалить записи. Причина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -391,13 +363,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    EditEntry(entry, action);
-
-                LogMessage($"Не удалось редактировать {entry}.\nПричина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
                 return entry;
             }
         }
@@ -428,13 +394,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    EditEntry(entry, action);
-
-                LogMessage($"Не удалось редактировать {entry}.\nПричина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
                 return entry;
             }
         }
@@ -462,13 +422,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    SaveEntry(entry);
-
-                LogMessage($"Не удалось сохранить {entry}.\nПричина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -484,37 +438,13 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"{ex.Message}\n\nПовторить попытку?",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                if (dr == DialogResult.Retry)
-                    ReplaceAll(newEntries);
-
-                LogMessage($"Не удалось заменить записи.\nПричина: {ex.Message}");
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
         #endregion
 
         #region Json Handlers
-
-        private async Task<string> ReadDbCacheAsync()
-        {
-            try
-            {
-                using var fs = new FileStream(DbFileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, true);
-                var buffer = new byte[fs.Length];
-                await fs.ReadAsync(buffer, 0, buffer.Length);
-                return Encoding.UTF8.GetString(buffer);
-            }
-            catch (FileNotFoundException)
-            {
-                Initialize();
-            }
-            catch { }
-
-            return string.Empty;
-        }
 
         private void WriteInternal(IEnumerable<T> content)
         {
@@ -534,14 +464,7 @@ namespace ExtendedFileHandler
                 }
                 catch (Exception ex)
                 {
-                    if (MessageBox.Show(
-                        $"An error occurred while serializing the JSON file:\n\n{ex.Message}{ex.StackTrace}",
-                        "Extended File Handler",
-                        MessageBoxButtons.RetryCancel,
-                        MessageBoxIcon.Error) == DialogResult.Retry)
-                    {
-                        WriteInternal(content);
-                    }
+                    LogMessage($"An error occurred while writing the content to the json file.\nMessage: {ex.Message}", ex.StackTrace);
                 }
             }
         }
@@ -556,7 +479,7 @@ namespace ExtendedFileHandler
                     using var reader = new StreamReader(stream);
                     var content = reader.ReadToEnd();
 
-                    if (!string.IsNullOrWhiteSpace(content))
+                    if (!content.IsNullOrWhiteSpace())
                         return JsonConvert.DeserializeObject<IEnumerable<T>>(content);
                 }
                 catch (FileNotFoundException)
@@ -565,12 +488,7 @@ namespace ExtendedFileHandler
                 }
                 catch (Exception ex)
                 {
-                    DialogResult dr =
-                        MessageBox.Show($"An error occurred while deserializing the JSON file:\n\n{ex.Message}{ex.StackTrace}",
-                        "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                    if (dr == DialogResult.Retry)
-                        return ReadInternal();
+                    LogMessage($"An error occurred while reading the json file.\nMessage: {ex.Message}", ex.StackTrace);
                 }
 
                 return [];
@@ -581,27 +499,24 @@ namespace ExtendedFileHandler
         {
             try
             {
-                var dbCache = await ReadDbCacheAsync();
+                using var fs = new FileStream(DbFileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, true);
+                var buffer = new byte[fs.Length];
+                await fs.ReadAsync(buffer, 0, buffer.Length);
+                var content = Encoding.UTF8.GetString(buffer);
 
-                if (!string.IsNullOrWhiteSpace(dbCache))
-                {
-                    return JsonConvert.DeserializeObject<IEnumerable<T>>(dbCache);
-                }
-                else
-                {
-                    Initialize();
-                    return await ReadInternalAsync();
-                }
+                if (!content.IsNullOrWhiteSpace())
+                    return JsonConvert.DeserializeObject<IEnumerable<T>>(content);
+            }
+            catch (FileNotFoundException)
+            {
+                Initialize();
             }
             catch (Exception ex)
             {
-                DialogResult dr = MessageBox.Show($"An error occurred while deserializing the JSON file:\n\n{ex.Message}{ex.StackTrace}",
-                    "Extended File Handler", MessageBoxButtons.RetryCancel, MessageBoxIcon.Error);
-
-                return dr == DialogResult.Retry
-                    ? await ReadInternalAsync()
-                    : ([]);
+                LogMessage($"An error occurred while asynchronously reading the json file.\nMessage: {ex.Message}", ex.StackTrace);
             }
+
+            return [];
         }
 
         #endregion

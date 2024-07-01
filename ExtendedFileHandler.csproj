@@ -69,8 +69,8 @@
   <ItemGroup>
     <Compile Include="ConfigWorker.cs" />
     <Compile Include="DbWorker.cs" />
-    <Compile Include="EventArgs\LogMessageArgs.cs" />
-    <Compile Include="Extensions.cs" />
+    <Compile Include="EventArguments\ErrorMessageEventArgs.cs" />
+    <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
