@@ -50,6 +50,8 @@ namespace ExtendedFileHandler
                         using var fs = DbFileInfo.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
                         using var sw = new StreamWriter(fs, new UTF8Encoding());
                         sw.Flush();
+                        sw.Close();
+                        fs.Close();
                     }
                     catch (Exception ex)
                     {
@@ -452,10 +454,13 @@ namespace ExtendedFileHandler
             {
                 try
                 {
-                    using var stream = DbFileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
-                    using var writer = new StreamWriter(stream);
-                    stream.SetLength(0);
-                    writer.Write(JsonConvert.SerializeObject(content, Formatting.Indented));
+                    using var fs = DbFileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+                    using var sw = new StreamWriter(fs);
+                    fs.SetLength(0);
+                    sw.Write(JsonConvert.SerializeObject(content, Formatting.Indented));
+
+                    sw.Close();
+                    fs.Close();
                 }
                 catch (FileNotFoundException)
                 {
@@ -475,9 +480,12 @@ namespace ExtendedFileHandler
             {
                 try
                 {
-                    using var stream = DbFileInfo.Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    using var reader = new StreamReader(stream);
-                    var content = reader.ReadToEnd();
+                    using var fs = DbFileInfo.Open(FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var sr = new StreamReader(fs);
+                    var content = sr.ReadToEnd();
+
+                    sr.Close();
+                    fs.Close();
 
                     if (!content.IsNullOrWhiteSpace())
                         return JsonConvert.DeserializeObject<IEnumerable<T>>(content);
@@ -503,6 +511,7 @@ namespace ExtendedFileHandler
                 var buffer = new byte[fs.Length];
                 await fs.ReadAsync(buffer, 0, buffer.Length);
                 var content = Encoding.UTF8.GetString(buffer);
+                fs.Close();
 
                 if (!content.IsNullOrWhiteSpace())
                     return JsonConvert.DeserializeObject<IEnumerable<T>>(content);
