@@ -175,6 +175,48 @@ namespace ExtendedFileHandler
 
         #region Operational Methods
 
+        public void ReplaceEntry(T oldEntry, T newEntry)
+        {
+            if (oldEntry == null)
+                throw new ArgumentNullException(nameof(oldEntry));
+
+            if (newEntry == null)
+                throw new ArgumentNullException(nameof(newEntry));
+
+            try
+            {
+                var sourceList = GetEntries().ToList();
+                var foundEntry = SearchEntryDirectlyOrNull(oldEntry, sourceList);
+
+                if (foundEntry != null)
+                {
+                    var oldEntryIndex = sourceList.IndexOf(foundEntry);
+                    sourceList[oldEntryIndex] = newEntry;
+
+                    WriteInternal(sourceList);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+            }
+        }
+
+        public void ReplaceAll(IEnumerable<T> newEntries)
+        {
+            if (newEntries is null)
+                throw new ArgumentNullException(nameof(newEntries));
+
+            try
+            {
+                WriteInternal(newEntries);
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+            }
+        }
+
         private void AddOrReplaceEntry(T entry, ref IEnumerable<T> source, bool overwriteExisting)
         {
             var sourceList = source.ToList();
@@ -396,21 +438,6 @@ namespace ExtendedFileHandler
             {
                 LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
                 return entry;
-            }
-        }
-
-        public void ReplaceAll(IEnumerable<T> newEntries)
-        {
-            if (newEntries is null)
-                throw new ArgumentNullException(nameof(newEntries));
-
-            try
-            {
-                WriteInternal(newEntries);
-            }
-            catch (Exception ex)
-            {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
