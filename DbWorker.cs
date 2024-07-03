@@ -70,7 +70,7 @@ namespace ExtendedFileHandler
         private void LogMessage(string message, string stackTrace) =>
             OnError?.Invoke(new(message, stackTrace));
 
-        #region Entries getters
+        #region Getters
 
         /// <summary>
         /// Obtains deserialized <typeparamref name="T"/> entry from the cache file.
@@ -121,7 +121,7 @@ namespace ExtendedFileHandler
 
         #endregion
 
-        #region Entries checkers
+        #region Checkers
 
         /// <summary>
         /// Uses direct search to determine if the entry exists in the cache file.
@@ -173,7 +173,7 @@ namespace ExtendedFileHandler
 
         #endregion
 
-        #region Add
+        #region Operational Methods
 
         private void AddOrReplaceEntry(T entry, ref IEnumerable<T> source, bool overwriteExisting)
         {
@@ -241,10 +241,6 @@ namespace ExtendedFileHandler
                 LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
-
-        #endregion
-
-        #region Delete
 
         /// <summary>
         /// Removes selected entry from the cache file.
@@ -341,10 +337,6 @@ namespace ExtendedFileHandler
             }
         }
 
-        #endregion
-
-        #region Edit
-
         /// <summary>
         /// Changes selected entry's properties to the cache file.
         /// </summary>
@@ -406,34 +398,6 @@ namespace ExtendedFileHandler
                 return entry;
             }
         }
-
-        #endregion
-
-        #region Save
-
-        /// <summary>
-        /// Universal method that overwrites (if enabled) selected entry if exists, otherwise adds a new one to the cache file.
-        /// </summary>
-        /// <param name="entry"></param>
-        /// <param name="overwriteExisting"></param>
-        /// <exception cref="ArgumentNullException"></exception>
-        public void SaveEntry(T entry, bool overwriteExisting = true)
-        {
-            if (entry is null)
-                throw new ArgumentNullException(nameof(entry));
-
-            try
-            {
-                var source = GetEntries();
-                AddOrReplaceEntry(entry, ref source, overwriteExisting);
-                WriteInternal(source);
-            }
-            catch (Exception ex)
-            {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
-            }
-        }
-
 
         public void ReplaceAll(IEnumerable<T> newEntries)
         {
