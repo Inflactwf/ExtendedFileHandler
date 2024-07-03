@@ -25,7 +25,7 @@ namespace ExtendedFileHandler
         {
             dbFileInfo = fileInfo;
             Thread.CurrentThread.CurrentCulture = cultureInfo;
-            Initialize();
+            TryInitializeInternal();
         }
 
         public FileInfo DbFileInfo
@@ -39,7 +39,7 @@ namespace ExtendedFileHandler
 
         public override string ToString() => DbFileInfo.Name;
 
-        private void Initialize()
+        private bool TryInitializeInternal()
         {
             lock (syncLocker)
             {
@@ -52,12 +52,18 @@ namespace ExtendedFileHandler
                         sw.Flush();
                         sw.Close();
                         fs.Close();
+
+                        return true;
                     }
                     catch (Exception ex)
                     {
                         LogMessage($"An error occurred while initializing the file.\nMessage: {ex.Message}", ex.StackTrace);
                     }
+
+                    return false;
                 }
+
+                return true;
             }
         }
 
@@ -462,10 +468,12 @@ namespace ExtendedFileHandler
                     sw.Close();
                     fs.Close();
                 }
-                catch (FileNotFoundException)
+                catch (FileNotFoundException ex)
                 {
-                    Initialize();
-                    WriteInternal(content);
+                    if (TryInitializeInternal())
+                        WriteInternal(content);
+                    else
+                        LogMessage($"An error occurred while writing the content to the json file.\nMessage: {ex.Message}", ex.StackTrace);
                 }
                 catch (Exception ex)
                 {
@@ -492,7 +500,7 @@ namespace ExtendedFileHandler
                 }
                 catch (FileNotFoundException)
                 {
-                    Initialize();
+                    TryInitializeInternal();
                 }
                 catch (Exception ex)
                 {
@@ -518,7 +526,7 @@ namespace ExtendedFileHandler
             }
             catch (FileNotFoundException)
             {
-                Initialize();
+                TryInitializeInternal();
             }
             catch (Exception ex)
             {
