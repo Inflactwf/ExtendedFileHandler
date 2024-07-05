@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace ExtendedFileHandler
 {
-    public class DbWorker<T> where T : class, IComparable
+    public class DbWorker<T> where T : class, IComparable<T>
     {
         private readonly object syncLocker = new();
         private readonly FileInfo dbFileInfo;
