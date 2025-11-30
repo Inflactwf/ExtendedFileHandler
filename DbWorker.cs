@@ -15,15 +15,15 @@ namespace ExtendedFileHandler
 {
     public class DbWorker<T> where T : class, IComparable<T>
     {
-        private readonly object syncLocker = new();
-        private readonly FileInfo dbFileInfo;
+        private readonly object _syncLocker = new();
+        private readonly FileInfo _dbFileInfo;
 
         public delegate void OnErrorEncountered(ErrorMessageEventArgs e);
         public event OnErrorEncountered OnError;
 
         public DbWorker(FileInfo fileInfo, CultureInfo cultureInfo)
         {
-            dbFileInfo = fileInfo;
+            _dbFileInfo = fileInfo;
             Thread.CurrentThread.CurrentCulture = cultureInfo;
             TryInitializeInternal();
         }
@@ -32,8 +32,8 @@ namespace ExtendedFileHandler
         {
             get
             {
-                dbFileInfo.Refresh();
-                return dbFileInfo;
+                _dbFileInfo.Refresh();
+                return _dbFileInfo;
             }
         }
 
@@ -41,29 +41,28 @@ namespace ExtendedFileHandler
 
         private bool TryInitializeInternal()
         {
-            lock (syncLocker)
+            lock (_syncLocker)
             {
-                if (!DbFileInfo.Exists)
+                if (DbFileInfo.Exists)
+                    return true;
+
+                try
                 {
-                    try
-                    {
-                        using var fs = DbFileInfo.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                        using var sw = new StreamWriter(fs, new UTF8Encoding());
-                        sw.Flush();
-                        sw.Close();
-                        fs.Close();
+                    using var fs = DbFileInfo.Open(FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                    using var sw = new StreamWriter(fs, new UTF8Encoding());
+                    sw.Flush();
+                    sw.Close();
+                    fs.Close();
 
-                        return true;
-                    }
-                    catch (Exception ex)
-                    {
-                        LogMessage($"An error occurred while initializing the file.\nMessage: {ex.Message}", ex.StackTrace);
-                    }
-
-                    return false;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"An error occurred while initializing the file.\nMessage: {ex.Message}", ex.StackTrace);
                 }
 
-                return true;
+                return false;
+
             }
         }
 
@@ -112,11 +111,7 @@ namespace ExtendedFileHandler
 
             source ??= GetEntries();
 
-            foreach (var sEntry in source)
-                if (Comparer<T>.Default.Compare(sEntry, entry) == 0)
-                    return sEntry;
-
-            return default;
+            return source.FirstOrDefault(sEntry => Comparer<T>.Default.Compare(sEntry, entry) == 0);
         }
 
         #endregion
@@ -131,9 +126,7 @@ namespace ExtendedFileHandler
         /// <returns><see langword="True"/> if the entry exists, otherwise <see langword="False"/>.</returns>
         /// <exception cref="ArgumentNullException"></exception>
         public bool IsEntryExists(T entry, IEnumerable<T> source) =>
-            entry is null
-            ? throw new ArgumentNullException(nameof(entry))
-            : SearchEntryDirectlyOrNull(entry, source) != null;
+            entry != null && SearchEntryDirectlyOrNull(entry, source) != null;
 
         /// <summary>
         /// Uses direct search to determine if the entry exists in the cache file.
@@ -143,9 +136,7 @@ namespace ExtendedFileHandler
         /// <returns><see langword="True"/> if the entry exists, otherwise <see langword="False"/>.</returns>
         /// <exception cref="ArgumentNullException"></exception>
         public bool IsEntryExists(T entry) =>
-            entry is null
-            ? throw new ArgumentNullException(nameof(entry))
-            : SearchEntryDirectlyOrNull(entry, GetEntries()) != null;
+            entry != null && SearchEntryDirectlyOrNull(entry, GetEntries()) != null;
 
         /// <summary>
         /// Searches for the entry to determine if the record exists in the cache file.
@@ -177,35 +168,32 @@ namespace ExtendedFileHandler
 
         public void ReplaceEntry(T oldEntry, T newEntry)
         {
-            if (oldEntry == null)
-                throw new ArgumentNullException(nameof(oldEntry));
-
-            if (newEntry == null)
-                throw new ArgumentNullException(nameof(newEntry));
+            if (oldEntry == null || newEntry == null)
+                return;
 
             try
             {
                 var sourceList = GetEntries().ToList();
                 var foundEntry = SearchEntryDirectlyOrNull(oldEntry, sourceList);
 
-                if (foundEntry != null)
-                {
-                    var oldEntryIndex = sourceList.IndexOf(foundEntry);
-                    sourceList[oldEntryIndex] = newEntry;
+                if (foundEntry == null)
+                    return;
 
-                    WriteInternal(sourceList);
-                }
+                var oldEntryIndex = sourceList.IndexOf(foundEntry);
+                sourceList[oldEntryIndex] = newEntry;
+
+                WriteInternal(sourceList);
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
         public void ReplaceAll(IEnumerable<T> newEntries)
         {
             if (newEntries is null)
-                throw new ArgumentNullException(nameof(newEntries));
+                return;
 
             try
             {
@@ -213,15 +201,16 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
         private void AddOrReplaceEntry(T entry, ref IEnumerable<T> source, bool overwriteExisting)
         {
             var sourceList = source.ToList();
-            var foundEntry = SearchEntryDirectlyOrNull(entry, source);
-            if (foundEntry == null || foundEntry != null && overwriteExisting)
+            var foundEntry = SearchEntryDirectlyOrNull(entry, sourceList);
+
+            if (foundEntry == null || overwriteExisting)
             {
                 var oldEntryIndex = sourceList.IndexOf(foundEntry);
                 if (oldEntryIndex == -1)
@@ -258,7 +247,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -280,7 +269,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -293,19 +282,17 @@ namespace ExtendedFileHandler
             try
             {
                 var source = GetEntries().ToList();
-                if (source != null)
-                {
-                    var foundEntry = source.FirstOrDefault(predicate);
-                    if (foundEntry != null)
-                    {
-                        source.Remove(foundEntry);
-                        WriteInternal(source);
-                    }
-                }
+                var foundEntry = source.FirstOrDefault(predicate);
+
+                if (foundEntry == null)
+                    return;
+
+                source.Remove(foundEntry);
+                WriteInternal(source);
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -318,19 +305,17 @@ namespace ExtendedFileHandler
             try
             {
                 var source = GetEntries().ToList();
-                if (source != null)
-                {
-                    var foundEntry = SearchEntryDirectlyOrNull(entry, source);
-                    if (foundEntry != null)
-                    {
-                        source.Remove(foundEntry);
-                        WriteInternal(source);
-                    }
-                }
+                var foundEntry = SearchEntryDirectlyOrNull(entry, source);
+
+                if (foundEntry == null)
+                    return;
+
+                source.Remove(foundEntry);
+                WriteInternal(source);
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -342,17 +327,11 @@ namespace ExtendedFileHandler
         {
             try
             {
-                var source = GetEntries();
-                if (source != null)
-                {
-                    var exceptList = source.Where(predicate);
-                    if (exceptList.Any())
-                        WriteInternal(source.Except(exceptList));
-                }
+                WriteInternal(GetEntries().Where(x => !predicate.Invoke(x)));
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -365,17 +344,15 @@ namespace ExtendedFileHandler
             try
             {
                 var source = GetEntries().ToList();
-                if (source != null && source.Any())
-                {
-                    foreach (var tEntry in entries)
-                        source.RemoveAll(sEntry => Comparer<T>.Default.Compare(sEntry, tEntry) == 0);
 
-                    WriteInternal(source);
-                }
+                foreach (var tEntry in entries)
+                    source.RemoveAll(sEntry => Comparer<T>.Default.Compare(sEntry, tEntry) == 0);
+
+                WriteInternal(source);
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
             }
         }
 
@@ -395,6 +372,7 @@ namespace ExtendedFileHandler
             {
                 var source = GetEntries();
                 var foundEntry = SearchEntryDirectlyOrNull(entry, source);
+
                 if (foundEntry != null)
                 {
                     action(foundEntry);
@@ -405,7 +383,7 @@ namespace ExtendedFileHandler
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
                 return entry;
             }
         }
@@ -424,19 +402,18 @@ namespace ExtendedFileHandler
 
             try
             {
-                var source = entriesList;
-                var foundEntry = SearchEntryDirectlyOrNull(entry, source);
+                var foundEntry = SearchEntryDirectlyOrNull(entry, entriesList);
                 if (foundEntry != null)
                 {
                     action(foundEntry);
-                    WriteInternal(source);
+                    WriteInternal(entriesList);
                 }
 
                 return foundEntry;
             }
             catch (Exception ex)
             {
-                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod().Name}.\nMessage: {ex.Message}", ex.StackTrace);
+                LogMessage($"An error occurred while executing {MethodBase.GetCurrentMethod()?.Name}.\nMessage: {ex.Message}", ex.StackTrace);
                 return entry;
             }
         }
@@ -447,7 +424,7 @@ namespace ExtendedFileHandler
 
         private void WriteInternal(IEnumerable<T> content)
         {
-            lock (syncLocker)
+            lock (_syncLocker)
             {
                 try
                 {
@@ -475,7 +452,7 @@ namespace ExtendedFileHandler
 
         private IEnumerable<T> ReadInternal()
         {
-            lock (syncLocker)
+            lock (_syncLocker)
             {
                 try
                 {
@@ -508,7 +485,7 @@ namespace ExtendedFileHandler
             {
                 using var fs = new FileStream(DbFileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, true);
                 var buffer = new byte[fs.Length];
-                await fs.ReadAsync(buffer, 0, buffer.Length);
+                _ = await fs.ReadAsync(buffer, 0, buffer.Length);
                 var content = Encoding.UTF8.GetString(buffer);
                 fs.Close();
 
